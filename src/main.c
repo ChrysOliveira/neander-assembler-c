@@ -180,11 +180,15 @@ int main(int argc, char *argv[]) {
       }
     }
   }
+
+  update_var_mem();
+  update_instruction_value();
   printf("Variables: \n");
   print_var_list(var_l);
   printf("\n");
   printf("Instructions: \n");
   print_instruction_list(instruction_l);
+
   free(bytes);
 
   return EXIT_SUCCESS;
@@ -213,7 +217,7 @@ bool is_letter(char c) {
   char str[2] = {c, '\0'};
 
   reti = regexec(&regex, str, 0, NULL, 0);
-  regfree(&regex); 
+  regfree(&regex);
 
   // Return 1 if it's a letter, 0 otherwise
   return (reti == 0);
@@ -243,17 +247,27 @@ bool is_letter(char c) {
 
 Var *create_var_node(char name, uint8_t value) {
   Var *new = (Var *)malloc(sizeof(Var));
+  if (!new) {
+    perror("Failed to allocate memory");
+    exit(EXIT_FAILURE);
+  }
+
   new->mem_addr = 0x00;
   new->name = name;
   new->value = value;
+  new->next = NULL;
 
-  if (var_l != NULL) {
-    new->next = var_l;
+  if (var_l == NULL) {
+    var_l = new;
   } else {
-    new->next = NULL;
+    Var *temp = var_l;
+    while (temp->next != NULL) {
+      temp = temp->next;
+    }
+    temp->next = new;
   }
 
-  return new;
+  return var_l;
 }
 
 void print_var_list(Var *l) {
@@ -273,6 +287,7 @@ void print_var_list(Var *l) {
 }
 
 Instruction *create_instruction_node(char *name, char var_name) {
+  printf("Creating instruction: %s | var_name: %c\n", name, var_name);
 
   Instruction *new = (Instruction *)malloc(sizeof(Instruction));
   new->mem_addr = start_mem;
@@ -333,4 +348,39 @@ int needs_two_bytes(const char *line) {
   regfree(&regex_one_byte);
 
   return -1; // Unknown instruction
+}
+
+void update_var_mem() {
+  Var *temp = var_l;
+  while (temp != NULL) {
+    temp->mem_addr = start_mem;
+    start_mem += 0x08;
+
+    temp = temp->next;
+  }
+}
+
+uint8_t find_var_value(char n) {
+  Var *temp = var_l;
+
+  while (temp != NULL) {
+    if (temp->name == n) {
+      return temp->value;
+    }
+
+    temp = temp->next;
+  }
+
+  return 0;
+}
+
+void update_instruction_value() {
+  Instruction *temp = instruction_l;
+
+  while (temp != NULL) {
+    printf("Updating instruction: %s | var_name: %c | found value: %d\n",
+           temp->name, temp->var_name, find_var_value(temp->var_name));
+    temp->value = find_var_value(temp->var_name);
+    temp = temp->next;
+  }
 }

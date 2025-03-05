@@ -47,4 +47,8 @@ Instruction *create_instruction_node(char *, char);
 void print_instruction_list(Instruction *);
 
 int needs_two_bytes(const char *);
+
+void update_var_mem();
+uint8_t find_var_value(char);
+void update_instruction_value();
 #endif // !__MAIN_H__
