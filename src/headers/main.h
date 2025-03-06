@@ -30,7 +30,7 @@ typedef struct var {
 
 typedef struct instruction {
   uint8_t mem_addr;
-  char name[3];
+  char name[4]; 
   uint8_t value;
   char var_name;
   struct instruction *next;

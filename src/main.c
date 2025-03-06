@@ -1,6 +1,7 @@
 #include "./headers/main.h"
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 long file_size = 0;
 Var *var_l = NULL;
@@ -10,6 +11,7 @@ uint8_t start_mem = 0x00;
 // TODO: improve the char to int in cases where the asm has hex values with
 // letters
 // TODO: remove duplicated code to functions
+// TODO: change read var value to hex instead of int
 int main(int argc, char *argv[]) {
   if (argc < 2) {
     fprintf(stderr, "Usage: %s <filename>\n", argv[0]);
@@ -287,11 +289,14 @@ void print_var_list(Var *l) {
 }
 
 Instruction *create_instruction_node(char *name, char var_name) {
-  printf("Creating instruction: %s | var_name: %c\n", name, var_name);
 
   Instruction *new = (Instruction *)malloc(sizeof(Instruction));
   new->mem_addr = start_mem;
+
   strcpy(new->name, name);
+  /* strncpy(new->name, name, 3); */
+  /* new->name[3] = '\0'; */
+
   new->var_name = var_name;
 
   if (instruction_l != NULL) {
@@ -362,15 +367,12 @@ void update_var_mem() {
 
 uint8_t find_var_value(char n) {
   Var *temp = var_l;
-
   while (temp != NULL) {
     if (temp->name == n) {
       return temp->value;
     }
-
     temp = temp->next;
   }
-
   return 0;
 }
 
@@ -378,8 +380,11 @@ void update_instruction_value() {
   Instruction *temp = instruction_l;
 
   while (temp != NULL) {
-    printf("Updating instruction: %s | var_name: %c | found value: %d\n",
-           temp->name, temp->var_name, find_var_value(temp->var_name));
+    if (temp->var_name == ' ') {
+      temp->value = 0x00;
+      temp = temp->next;
+      continue;
+    }
     temp->value = find_var_value(temp->var_name);
     temp = temp->next;
   }
