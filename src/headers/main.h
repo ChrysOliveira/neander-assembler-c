@@ -30,7 +30,7 @@ typedef struct var {
 
 typedef struct instruction {
   uint8_t mem_addr;
-  char name[4]; 
+  char name[4];
   uint8_t value;
   char var_name;
   struct instruction *next;
@@ -51,4 +51,9 @@ int needs_two_bytes(const char *);
 void update_var_mem();
 uint8_t find_var_value(char);
 void update_instruction_value();
+
+void generate_binary_file(const char *);
+uint8_t get_opcode_enum(const char *);
+
+uint8_t find_var_mem(char);
 #endif // !__MAIN_H__

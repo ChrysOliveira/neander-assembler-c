@@ -1,16 +1,10 @@
 #include "./headers/main.h"
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
 
 long file_size = 0;
 Var *var_l = NULL;
 Instruction *instruction_l = NULL;
 uint8_t start_mem = 0x00;
 
-// TODO: improve the char to int in cases where the asm has hex values with
-// letters
-// TODO: remove duplicated code to functions
 // TODO: change read var value to hex instead of int
 int main(int argc, char *argv[]) {
   if (argc < 2) {
@@ -81,6 +75,7 @@ int main(int argc, char *argv[]) {
           v[0] = bytes[i + 5];
           v[1] = bytes[i + 6];
 
+          /* uint8_t n_v = strtol(v, NULL, 16); */
           uint8_t n_v = atoi(v);
 
           var_l = create_var_node(bytes[i], n_v);
@@ -121,10 +116,10 @@ int main(int argc, char *argv[]) {
 
         if (ntb == 1) {
           instruction_l = create_instruction_node(name, ' ');
-          start_mem += 0x08;
+          start_mem += 0x01;
         } else if (ntb == 2) {
           instruction_l = create_instruction_node(name, line[4]);
-          start_mem += 0x0F;
+          start_mem += 0x02;
         }
 
         while (bytes[i] != '\n') {
@@ -165,8 +160,9 @@ int main(int argc, char *argv[]) {
             v[0] = bytes[i + 5];
             v[1] = bytes[i + 6];
 
+            /* start_mem = strtol(v, NULL, 16); */
             start_mem = atoi(v);
-            printf("Start memory: %x\n", start_mem);
+            printf("START MEMORY (hex): %x\n\n", start_mem);
           }
 
           while (bytes[i] != '\n') {
@@ -177,7 +173,8 @@ int main(int argc, char *argv[]) {
         }
         break;
       default:
-        printf("%c", bytes[i]);
+        // file characters not filtered
+        /* printf("%c", bytes[i]); */
         break;
       }
     }
@@ -185,12 +182,12 @@ int main(int argc, char *argv[]) {
 
   update_var_mem();
   update_instruction_value();
-  printf("Variables: \n");
+  printf("VARIABLES: \n");
   print_var_list(var_l);
   printf("\n");
-  printf("Instructions: \n");
+  printf("INSTRUCTIONS: \n");
   print_instruction_list(instruction_l);
-
+  generate_binary_file("binary.mem");
   free(bytes);
 
   return EXIT_SUCCESS;
@@ -277,7 +274,7 @@ void print_var_list(Var *l) {
   Var *temp = l;
 
   while (temp != NULL) {
-    printf("{memory_addr: %x | name: %c | value: %d | next: %x} %s ",
+    printf("{memory_addr: %x | name: %c | value(hex): %x | next: %x} %s ",
            temp->mem_addr, temp->name, temp->value,
            (temp->next != NULL ? temp->next->mem_addr : 0x00),
            (temp->next != NULL ? "->" : ""));
@@ -289,23 +286,28 @@ void print_var_list(Var *l) {
 }
 
 Instruction *create_instruction_node(char *name, char var_name) {
-
   Instruction *new = (Instruction *)malloc(sizeof(Instruction));
-  new->mem_addr = start_mem;
-
-  strcpy(new->name, name);
-  /* strncpy(new->name, name, 3); */
-  /* new->name[3] = '\0'; */
-
-  new->var_name = var_name;
-
-  if (instruction_l != NULL) {
-    new->next = instruction_l;
-  } else {
-    new->next = NULL;
+  if (!new) {
+    perror("Failed to allocate memory");
+    exit(EXIT_FAILURE);
   }
 
-  return new;
+  new->mem_addr = start_mem;
+  strcpy(new->name, name);
+  new->var_name = var_name;
+  new->next = NULL;
+
+  if (instruction_l == NULL) {
+    instruction_l = new;
+  } else {
+    Instruction *temp = instruction_l;
+    while (temp->next != NULL) {
+      temp = temp->next;
+    }
+    temp->next = new;
+  }
+
+  return instruction_l;
 }
 
 void print_instruction_list(Instruction *l) {
@@ -313,7 +315,8 @@ void print_instruction_list(Instruction *l) {
   Instruction *temp = l;
 
   while (temp != NULL) {
-    printf("{memory_addr: %x | name: %s | value: %d | var_name: %c | next: %x} "
+    printf("{memory_addr: %x | name: %s | value(hex): %x | var_name: %c | "
+           "next: %x} "
            "%s ",
            temp->mem_addr, temp->name, temp->value, temp->var_name,
            (temp->next != NULL ? temp->next->mem_addr : 0x00),
@@ -359,7 +362,7 @@ void update_var_mem() {
   Var *temp = var_l;
   while (temp != NULL) {
     temp->mem_addr = start_mem;
-    start_mem += 0x08;
+    start_mem += 0x01;
 
     temp = temp->next;
   }
@@ -388,4 +391,97 @@ void update_instruction_value() {
     temp->value = find_var_value(temp->var_name);
     temp = temp->next;
   }
+}
+
+void generate_binary_file(const char *output_filename) {
+  FILE *bin_file = fopen(output_filename, "wb");
+  if (!bin_file) {
+    perror("Error creating binary file");
+    exit(EXIT_FAILURE);
+  }
+
+  uint8_t sign[] = {0x03, 0x4E, 0x44, 0x52};
+  uint8_t white_space = 0x00;
+  fwrite(sign, sizeof(uint8_t), 4, bin_file);
+
+  size_t byte_count = 4;
+
+  Instruction *temp_i = instruction_l;
+
+  for (int i = 0; i < temp_i->mem_addr; i++) {
+    fwrite(&white_space, sizeof(uint8_t), 1, bin_file);
+    fwrite(&white_space, sizeof(uint8_t), 1, bin_file);
+  }
+
+  while (temp_i != NULL) {
+    uint8_t opcode = (uint8_t)get_opcode_enum(temp_i->name);
+    uint8_t operand =
+        (temp_i->var_name == ' ') ? 0x00 : find_var_mem(temp_i->var_name);
+
+    fwrite(&opcode, sizeof(uint8_t), 1, bin_file);
+    fwrite(&white_space, sizeof(uint8_t), 1, bin_file);
+    byte_count += 2;
+
+    if (operand != 0x00) {
+      fwrite(&operand, sizeof(uint8_t), 1, bin_file);
+      fwrite(&white_space, sizeof(uint8_t), 1, bin_file);
+      byte_count += 2;
+    }
+
+    temp_i = temp_i->next;
+  }
+
+  Var *temp_l = var_l;
+  while (temp_l != NULL) {
+    uint8_t value = (uint8_t)find_var_value(temp_l->name);
+    fwrite(&value, sizeof(uint8_t), 1, bin_file);
+    fwrite(&white_space, sizeof(uint8_t), 1, bin_file);
+    byte_count += 2;
+
+    temp_l = temp_l->next;
+  }
+
+  while (byte_count < 516) {
+    fwrite(&white_space, sizeof(uint8_t), 1, bin_file);
+    byte_count++;
+  }
+
+  fclose(bin_file);
+}
+
+uint8_t get_opcode_enum(const char *mnemonic) {
+  if (strcmp(mnemonic, "NOP") == 0)
+    return NOP;
+  if (strcmp(mnemonic, "STA") == 0)
+    return STA;
+  if (strcmp(mnemonic, "LDA") == 0)
+    return LDA;
+  if (strcmp(mnemonic, "ADD") == 0)
+    return ADD;
+  if (strcmp(mnemonic, "OR") == 0)
+    return OR;
+  if (strcmp(mnemonic, "AND") == 0)
+    return AND;
+  if (strcmp(mnemonic, "NOT") == 0)
+    return NOT;
+  if (strcmp(mnemonic, "JMP") == 0)
+    return JMP;
+  if (strcmp(mnemonic, "JN") == 0)
+    return JN;
+  if (strcmp(mnemonic, "JZ") == 0)
+    return JZ;
+  if (strcmp(mnemonic, "HLT") == 0)
+    return HLT;
+  return 0xFF;
+}
+
+uint8_t find_var_mem(char var_name) {
+  Var *temp = var_l;
+  while (temp) {
+    if (temp->name == var_name) {
+      return temp->mem_addr;
+    }
+    temp = temp->next;
+  }
+  return 0x00;
 }
