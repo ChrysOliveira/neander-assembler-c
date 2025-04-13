@@ -1,0 +1,33 @@
+; Comentário
+; x = a * b
+
+.DATA
+A DB -7
+B DB -8
+X DB ?
+Y DB 1
+Z DB -1
+
+.CODE
+.ORG 0
+LDA A
+JN 4 
+JZ 18
+JMP 12
+NOT
+ADD Y
+STA A
+LDA B
+NOT
+ADD Y
+STA B
+JMP 0
+ADD Z
+STA A
+LDA X
+ADD B
+STA X
+JMP 0
+LDA X
+HLT
+

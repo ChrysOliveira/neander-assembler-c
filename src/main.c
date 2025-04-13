@@ -1,4 +1,5 @@
 #include "./headers/main.h"
+#include <stdio.h>
 
 long file_size = 0;
 Var *var_l = NULL;
@@ -92,16 +93,25 @@ int main(int argc, char *argv[]) {
     } else if (code_scope) {
       char line[6];
       do {
-        line[0] = bytes[i];
-        line[1] = bytes[i + 1];
-        line[2] = bytes[i + 2];
-        if (bytes[i + 3] != '\n') {
-          line[3] = bytes[i + 3];
-          line[4] = bytes[i + 4];
-          line[5] = '\0';
-        } else {
-          line[3] = '\0';
+
+        int j = i;
+        int k = 0;
+
+        bool value = false;
+
+        while (bytes[j] != '\n') {
+          if (value && bytes[j] == ' ') {
+            break;
+          } else if (bytes[j] == ' ') {
+            value = true;
+          }
+
+          line[k] = bytes[j];
+          k++;
+          j = i + k;
         }
+
+        line[k] = '\0';
 
         if (needs_two_bytes(line) == -1)
           break;
@@ -408,6 +418,7 @@ void generate_binary_file(const char *output_filename) {
 
   Instruction *temp_i = instruction_l;
 
+  // this loop is used to put N white spaces (0x00) before the .ORG value
   for (int i = 0; i < temp_i->mem_addr; i++) {
     fwrite(&white_space, sizeof(uint8_t), 1, bin_file);
     fwrite(&white_space, sizeof(uint8_t), 1, bin_file);
