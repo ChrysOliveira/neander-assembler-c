@@ -26,4 +26,4 @@ clean:
 	rm -f $(ODIR)/*.o *~ core $(IDIR)/*~ 
 
 run:
-	$(BDIR)/main example.asm
+	$(BDIR)/main mult.asm

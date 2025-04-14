@@ -1,5 +1,7 @@
 #include "./headers/main.h"
+#include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 long file_size = 0;
 Var *var_l = NULL;
@@ -91,15 +93,16 @@ int main(int argc, char *argv[]) {
       data_scope = false;
 
     } else if (code_scope) {
-      char line[6];
+      char line[16];
+      int ntb = 0;
+
       do {
 
         int j = i;
         int k = 0;
-
         bool value = false;
 
-        while (bytes[j] != '\n') {
+        while (bytes[j] != '\n' && k < (sizeof(line) - 1)) {
           if (value && bytes[j] == ' ') {
             break;
           } else if (bytes[j] == ' ') {
@@ -107,24 +110,36 @@ int main(int argc, char *argv[]) {
           }
 
           line[k] = bytes[j];
+          /* printf("Lendo: \"%c\" da linha: \"%s\"\n", bytes[j], line); */
           k++;
           j = i + k;
         }
 
         line[k] = '\0';
 
-        if (needs_two_bytes(line) == -1)
+        ntb = needs_two_bytes(line);
+
+        if (ntb == -1)
           break;
 
-        uint8_t ntb = needs_two_bytes(line);
-
         char name[4];
-        name[0] = line[0];
-        name[1] = line[1];
-        name[2] = line[2];
-        name[3] = '\0';
+        k = 0;
+        while (line[k] != ' ' && line[k] != '\n' && k < 3) {
+          name[k] = line[k];
+          k++;
+        }
+        name[k] = '\0';
 
-        if (ntb == 1) {
+        /* printf("LINE:%s BYTES:%d\n", line, ntb); */
+        /* printf("NAME:%s\n", name); */
+
+        if (strcmp(name, "JN") == 0 || strcmp(name, "JZ") == 0 ||
+            strcmp(name, "JMP") == 0) {
+          printf("Creating %s with value %d\n", name, extract_line_addr(line));
+          instruction_l =
+              create_instruction_node_addr(name, extract_line_addr(line));
+          start_mem += 0x02;
+        } else if (ntb == 1) {
           instruction_l = create_instruction_node(name, ' ');
           start_mem += 0x01;
         } else if (ntb == 2) {
@@ -137,7 +152,7 @@ int main(int argc, char *argv[]) {
         }
 
         i++;
-      } while (needs_two_bytes(line) == 1 || needs_two_bytes(line) == 2);
+      } while (ntb == 1 || ntb == 2);
 
       code_scope = false;
     } else {
@@ -284,10 +299,11 @@ void print_var_list(Var *l) {
   Var *temp = l;
 
   while (temp != NULL) {
-    printf("{memory_addr: %x | name: %c | value(hex): %x | next: %x} %s ",
-           temp->mem_addr, temp->name, temp->value,
-           (temp->next != NULL ? temp->next->mem_addr : 0x00),
-           (temp->next != NULL ? "->" : ""));
+    printf(
+        "{memory_addr: %02x | name: %c | value(hex): %02x | next: %02x} %s\n",
+        temp->mem_addr, temp->name, temp->value,
+        (temp->next != NULL ? temp->next->mem_addr : 0x00),
+        (temp->next != NULL ? "->" : ""));
 
     temp = temp->next;
   }
@@ -320,17 +336,44 @@ Instruction *create_instruction_node(char *name, char var_name) {
   return instruction_l;
 }
 
+Instruction *create_instruction_node_addr(char *name, uint8_t addr) {
+  Instruction *new = (Instruction *)malloc(sizeof(Instruction));
+  if (!new) {
+    perror("Failed to allocate memory");
+    exit(EXIT_FAILURE);
+  }
+
+  new->mem_addr = start_mem;
+  strcpy(new->name, name);
+  new->value = addr;
+  new->var_name = ' ';
+  new->next = NULL;
+
+  if (instruction_l == NULL) {
+    instruction_l = new;
+  } else {
+    Instruction *temp = instruction_l;
+    while (temp->next != NULL) {
+      temp = temp->next;
+    }
+    temp->next = new;
+  }
+
+  return instruction_l;
+}
+
 void print_instruction_list(Instruction *l) {
 
   Instruction *temp = l;
 
   while (temp != NULL) {
-    printf("{memory_addr: %x | name: %s | value(hex): %x | var_name: %c | "
-           "next: %x} "
-           "%s ",
-           temp->mem_addr, temp->name, temp->value, temp->var_name,
-           (temp->next != NULL ? temp->next->mem_addr : 0x00),
-           (temp->next != NULL ? "->" : ""));
+    printf(
+        "{memory_addr: %02x | name: %03s | value(hex): %02x | var_name: %c | "
+        "next: %02x} "
+        "%s \n",
+        temp->mem_addr, temp->name, temp->value, temp->var_name,
+        (temp->next != NULL ? temp->next->mem_addr : 0x00),
+        (temp->next != NULL ? "->" : ""));
 
     temp = temp->next;
   }
@@ -342,7 +385,8 @@ int needs_two_bytes(const char *line) {
   regex_t regex_two_bytes, regex_one_byte;
   int result;
 
-  regcomp(&regex_two_bytes, "^(STA|LDA|ADD|OR|AND|JMP|JN|JZ)\\s+[A-Z]$",
+  regcomp(&regex_two_bytes,
+          "^(STA|LDA|ADD|OR|AND)\\s+[A-Z]$|^(JMP|JN|JZ)\\s+[0-9]+$",
           REG_EXTENDED);
 
   regcomp(&regex_one_byte, "^(NOP|NOT|HLT)$", REG_EXTENDED);
@@ -393,6 +437,13 @@ void update_instruction_value() {
   Instruction *temp = instruction_l;
 
   while (temp != NULL) {
+
+    if (strcmp(temp->name, "JN") == 0 || strcmp(temp->name, "JZ") == 0 ||
+        strcmp(temp->name, "JMP") == 0) {
+      temp = temp->next;
+      continue;
+    }
+
     if (temp->var_name == ' ') {
       temp->value = 0x00;
       temp = temp->next;
@@ -426,14 +477,27 @@ void generate_binary_file(const char *output_filename) {
 
   while (temp_i != NULL) {
     uint8_t opcode = (uint8_t)get_opcode_enum(temp_i->name);
-    uint8_t operand =
-        (temp_i->var_name == ' ') ? 0x00 : find_var_mem(temp_i->var_name);
+
+    uint8_t operand;
+
+    if (opcode == JMP || opcode == JN || opcode == JZ) {
+      operand = find_line_addr(instruction_l, temp_i->value);
+      printf("Finding line addr of value %d result: %d\n", temp_i->value,
+             operand);
+    } else {
+      operand =
+          (temp_i->var_name == ' ') ? 0x00 : find_var_mem(temp_i->var_name);
+    }
 
     fwrite(&opcode, sizeof(uint8_t), 1, bin_file);
     fwrite(&white_space, sizeof(uint8_t), 1, bin_file);
     byte_count += 2;
 
     if (operand != 0x00) {
+      fwrite(&operand, sizeof(uint8_t), 1, bin_file);
+      fwrite(&white_space, sizeof(uint8_t), 1, bin_file);
+      byte_count += 2;
+    } else if (opcode == JMP || opcode == JN || opcode == JZ) {
       fwrite(&operand, sizeof(uint8_t), 1, bin_file);
       fwrite(&white_space, sizeof(uint8_t), 1, bin_file);
       byte_count += 2;
@@ -495,4 +559,31 @@ uint8_t find_var_mem(char var_name) {
     temp = temp->next;
   }
   return 0x00;
+}
+
+uint8_t find_line_addr(Instruction *instruction_l, int line) {
+
+  Instruction *temp = instruction_l;
+
+  int i = 0;
+  while (i < line) {
+    temp = temp->next;
+    i++;
+  }
+
+  return temp->mem_addr;
+}
+
+uint8_t extract_line_addr(char *line) {
+  char *space_ptr = strchr(line, ' ');
+
+  if (space_ptr != NULL && *(space_ptr + 1) != '\0') {
+    char *value_s = strdup(space_ptr + 1);
+    uint8_t value = atoi(value_s);
+    free(value_s);
+    return value;
+  } else {
+    printf("No number found after space.\n");
+    return 0x00;
+  }
 }

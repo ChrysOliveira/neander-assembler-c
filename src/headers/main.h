@@ -44,6 +44,7 @@ Var *create_var_node(char, uint8_t);
 void print_var_list(Var *);
 
 Instruction *create_instruction_node(char *, char);
+Instruction *create_instruction_node_addr(char *, uint8_t);
 void print_instruction_list(Instruction *);
 
 int needs_two_bytes(const char *);
@@ -56,4 +57,8 @@ void generate_binary_file(const char *);
 uint8_t get_opcode_enum(const char *);
 
 uint8_t find_var_mem(char);
+
+uint8_t find_line_addr(Instruction *, int);
+
+uint8_t extract_line_addr(char *);
 #endif // !__MAIN_H__
