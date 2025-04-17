@@ -482,8 +482,7 @@ void generate_binary_file(const char *output_filename) {
 
     if (opcode == JMP || opcode == JN || opcode == JZ) {
       operand = find_line_addr(instruction_l, temp_i->value);
-      printf("Finding line addr of value %d result: %d\n", temp_i->value,
-             operand);
+      printf("Finding line addr of value %d result: %d\n", temp_i->value, operand);
     } else {
       operand =
           (temp_i->var_name == ' ') ? 0x00 : find_var_mem(temp_i->var_name);
@@ -497,10 +496,11 @@ void generate_binary_file(const char *output_filename) {
       fwrite(&operand, sizeof(uint8_t), 1, bin_file);
       fwrite(&white_space, sizeof(uint8_t), 1, bin_file);
       byte_count += 2;
-    } else if (opcode == JMP || opcode == JN || opcode == JZ) {
+    } else if (opcode == JMP || opcode == JN || opcode == JZ){
       fwrite(&operand, sizeof(uint8_t), 1, bin_file);
       fwrite(&white_space, sizeof(uint8_t), 1, bin_file);
       byte_count += 2;
+
     }
 
     temp_i = temp_i->next;
